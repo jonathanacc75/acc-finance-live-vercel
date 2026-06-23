@@ -62,6 +62,7 @@ function buildStock(text) {
         if (il && !PLACEHOLDER.some((p) => il.includes(p))) imgs = [il];
       }
     }
+    imgs = imgs.map((u) => "/api/photo?u=" + encodeURIComponent(u));
     const img = imgs[0] || "";
     const miles = toInt(get(row, "miles")) ?? toInt(get(row, "odometerReadingMiles"));
     const trans = clean(get(row, "transmissionType"));
