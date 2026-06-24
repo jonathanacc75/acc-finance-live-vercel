@@ -437,14 +437,36 @@
     try{
       await (document.fonts?document.fonts.ready:Promise.resolve());
       const prev=scaleWrap.style.transform;scaleWrap.style.transform='none';
-      const taint=heroTainted&&slide.classList.contains('has-bg');
-      let savedBg='';if(taint){savedBg=$('sBg').style.backgroundImage;$('sBg').style.backgroundImage='';}
-      const canvas=await html2canvas(slide,{scale:2,backgroundColor:'#0B0B09',useCORS:true,logging:false});
-      if(taint){$('sBg').style.backgroundImage=savedBg;}
+
+      const bgStr=$('sBg').style.backgroundImage;
+      const hasPhoto=slide.classList.contains('has-bg') && !!bgStr && bgStr!=='none';
+      let heroImg=null, savedBg='', savedSlideBg='';
+      if(hasPhoto){
+        const src=bgStr.replace(/^url\((['"]?)(.*)\1\)$/,'$2');
+        heroImg=await new Promise(r=>{const im=new Image();if(!/^data:/.test(src))im.crossOrigin='anonymous';im.onload=()=>r(im);im.onerror=()=>r(null);im.src=src;});
+        // capture text + scrims over transparency; the photo is drawn by us
+        savedBg=$('sBg').style.backgroundImage; $('sBg').style.backgroundImage='';
+        savedSlideBg=slide.style.background; slide.style.background='transparent';
+      }
+      const shot=await html2canvas(slide,{scale:2,backgroundColor:hasPhoto?null:'#0B0B09',useCORS:true,logging:false});
+      if(hasPhoto){$('sBg').style.backgroundImage=savedBg; slide.style.background=savedSlideBg;}
       scaleWrap.style.transform=prev;fit();
-      const data=canvas.toDataURL(type==='jpg'?'image/jpeg':'image/png',.95);
+
+      let out=shot;
+      if(hasPhoto){
+        out=document.createElement('canvas'); out.width=shot.width; out.height=shot.height;
+        const ctx=out.getContext('2d');
+        if(heroImg){
+          const cw=out.width, ch=out.height, ir=heroImg.width/heroImg.height, cr=cw/ch;
+          let dw,dh,dx,dy;
+          if(ir>cr){dh=ch;dw=ch*ir;dx=(cw-dw)/2;dy=0;}else{dw=cw;dh=cw/ir;dx=0;dy=(ch-dh)/2;}
+          ctx.drawImage(heroImg,dx,dy,dw,dh);
+        }else{ ctx.fillStyle='#0B0B09'; ctx.fillRect(0,0,out.width,out.height); }
+        ctx.drawImage(shot,0,0);
+      }
+      const data=out.toDataURL(type==='jpg'?'image/jpeg':'image/png',.95);
       const name=(($('vehicle').value||'finance-slide').replace(/[^a-z0-9]+/gi,'-').replace(/^-|-$/g,'').toLowerCase())+'-finance.'+(type==='jpg'?'jpg':'png');
-      const a=document.createElement('a');a.href=data;a.download=name;a.click();toast(taint?'Saved — photo was preview-only, upload it to embed':'Saved '+name);
+      const a=document.createElement('a');a.href=data;a.download=name;a.click();toast('Saved '+name);
     }catch(err){console.error(err);toast('Export failed — try again');}
     finally{btn.disabled=false;btn.textContent=lab;}
   }
