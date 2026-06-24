@@ -369,9 +369,20 @@
   function setActiveThumb(url){[...document.querySelectorAll('.thumb')].forEach(t=>t.classList.toggle('on',t.dataset.url===url));}
   function updateHeroWarn(){const w=$('heroWarn');if(heroTainted){w.style.display='block';w.textContent='\u26a0 This photo is preview-only \u2014 the image host blocks embedding. Save it and upload it to include it in the download.';}else{w.style.display='none';}}
   function renderThumbs(imgs){const wrap=$('thumbs');wrap.innerHTML='';if(!imgs||!imgs.length){$('galleryWrap').style.display='none';return;}$('galleryWrap').style.display='block';imgs.forEach(u=>{const b=document.createElement('button');b.type='button';b.className='thumb';b.dataset.url=u;b.style.backgroundImage='url("'+u+'")';b.addEventListener('click',()=>loadHero(u));wrap.appendChild(b);});}
-  function loadHero(url){
+  async function loadHero(url){
     heroTainted=false;
     if(!url){$('sBg').style.backgroundImage='';setBgMode(false);updateHeroWarn();setActiveThumb('');return;}
+    // Preferred path: pull the image bytes and inline as a data URL so the
+    // downloaded slide always contains the photo (no html2canvas guesswork).
+    try{
+      const resp=await fetch(url,{cache:'force-cache'});
+      if(!resp.ok) throw new Error('img '+resp.status);
+      const blob=await resp.blob();
+      const dataUrl=await new Promise((res,rej)=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.onerror=rej;fr.readAsDataURL(blob);});
+      $('sBg').style.backgroundImage='url("'+dataUrl+'")';
+      heroTainted=false;setBgMode(true);updateHeroWarn();setActiveThumb(url);
+      return;
+    }catch(e){ /* cross-origin/no proxy — fall back to direct load + taint check */ }
     const apply=(cors)=>{const im=new Image();if(cors)im.crossOrigin='anonymous';im.onload=()=>{$('sBg').style.backgroundImage='url("'+url+'")';if(!cors)heroTainted=true;setBgMode(true);updateHeroWarn();setActiveThumb(url);};im.onerror=()=>{if(cors){apply(false);}else{$('sBg').style.backgroundImage='';setBgMode(false);}};im.src=url;};
     apply(true);
   }
